@@ -271,7 +271,7 @@ app.get("/stop/:accountId/:market", (req, res) => {
     // Отправляем сообщение отписки от событий
     if (account.ws) {
       const unsubscribeMessage = {
-        id: 12,
+        id: 13,
         method: "ordersExecuted_unsubscribe", // Метод для отписки
         params: [[market]], // Указываем рынок, от которого отписываемся
       };
