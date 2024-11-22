@@ -1,5 +1,4 @@
 require("dotenv").config();
-
 const axios = require("axios");
 const WebSocket = require("ws");
 const express = require("express");
@@ -110,7 +109,7 @@ async function sendPayload(accountId, params) {
   }
 }
 
-function startTracking(account) {
+async function startTracking(account) {
   const connect = async () => {
     try {
       const token = await getWsToken(account.account_id);
@@ -121,11 +120,12 @@ function startTracking(account) {
       ws.on("open", () => {
         console.log(`[Аккаунт ${account.account_id}] Подключено к WebSocket`);
 
+        // Отправляем токен для авторизации
         ws.send(
           JSON.stringify({
             id: 0,
             method: "authorize",
-            params: [account.token, "public"],
+            params: [account.token, "public"], // Токен передается здесь
           })
         );
 
@@ -137,7 +137,7 @@ function startTracking(account) {
         const uniqueAssets = [...new Set(assets)];
         subscribeToBalance(ws, uniqueAssets);
 
-        // Отправляем пинг каждые 25 секунд для поддержания соединения
+        // Пинг для поддержания соединения
         const pingMessage = JSON.stringify({
           id: 1,
           method: "ping",
@@ -228,6 +228,18 @@ app.get("/start/:accountId/:market", async (req, res) => {
     console.log(`Добавлен новый аккаунт с id ${accountId}`);
   }
 
+  // Если токен отсутствует, получаем его
+  if (!account.token) {
+    try {
+      // Получаем токен для этого аккаунта
+      account.token = await getWsToken(account.account_id); 
+      console.log(`Токен для аккаунта ${accountId}: ${account.token}`);
+    } catch (error) {
+      console.error(`Не удалось получить токен для аккаунта ${accountId}:`, error.message);
+      return res.status(500).json({ error: 'Не удалось получить токен для WebSocket.' });
+    }
+  }
+
   // Добавляем рынок, если его еще нет
   if (!account.markets.includes(market)) {
     account.markets.push(market);
@@ -236,7 +248,8 @@ app.get("/start/:accountId/:market", async (req, res) => {
     // Если WebSocket еще не подключен, подключаемся
     if (!account.ws) {
       try {
-        await startTracking(account); // Подключаемся к WebSocket
+        // Подключаемся к WebSocket с токеном
+        await startTracking(account); // Подключение с использованием токена
       } catch (error) {
         console.error(`Ошибка при запуске отслеживания для аккаунта ${accountId}:`, error.message);
         return res.status(500).json({ error: 'Не удалось запустить отслеживание.' });
@@ -252,7 +265,7 @@ app.get("/start/:accountId/:market", async (req, res) => {
   return res.json({ success: `Начато отслеживание для аккаунта ${accountId} и рынка ${market}` });
 });
 
-// Эндпоинт для остановки отслеживания
+
 // Эндпоинт для остановки отслеживания
 app.get("/stop/:accountId/:market", (req, res) => {
   const { accountId, market } = req.params;
@@ -264,42 +277,22 @@ app.get("/stop/:accountId/:market", (req, res) => {
   }
 
   const marketIndex = account.markets.indexOf(market);
-  
   if (marketIndex !== -1) {
-    // Убираем рынок
-    account.markets.splice(marketIndex, 1);
+    account.markets.splice(marketIndex, 1); // Убираем рынок
     console.log(`Рынок ${market} удален для аккаунта ${accountId}`);
-
-    // Отправляем сообщение отписки от событий
-    if (account.ws) {
-      const unsubscribeMessage = {
-        id: 13, // Убедитесь, что ID уникален для каждого запроса
-        method: "ordersExecuted_unsubscribe", // Метод для отписки
-        params: [market], // Указываем рынок, от которого отписываемся
-      };
-      account.ws.send(JSON.stringify(unsubscribeMessage));
-      console.log(`Отправлено сообщение отписки для рынка ${market} аккаунта ${accountId}`);
-    }
-
-    // Если больше нет рынков
-    if (account.markets.length === 0 && account.ws) {
-      account.ws.close(); // Закрываем соединение
-      account.ws = null;
-      console.log(`Соединение закрыто для аккаунта ${accountId}`);
-    }
   }
 
-  return res.json({ success: `Рынок ${market} остановлен для аккаунта ${accountId}` });
-});
-// Запуск сервера API
-const port = 3000;
+  if (account.markets.length === 0 && account.ws) {
+    account.ws.close();
+    account.ws = null;
+    console.log(`[Аккаунт ${accountId}] Остановлено отслеживание всех рынков`);
+  }
 
-app.use(express.json());
-
-app.listen(port, () => {
-  console.log(`Сервер работает на http://localhost:${port}`);
+  return res.json({ success: `Рынок ${market} удален для аккаунта ${accountId}` });
 });
 
-// Запускаем отслеживание для всех аккаунтов
-accounts.forEach((account) => startTracking(account));
-
+// Запуск сервера
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Сервер запущен на порту ${PORT}`);
+});
