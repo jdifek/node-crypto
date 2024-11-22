@@ -13,11 +13,7 @@ if (!WHITEBIT_WSS_HOST || !API_HOST) {
   process.exit(1);
 }
 
-let accounts = [
-  { account_id: 1, token: null, markets: ["USDC_USDT", "BTC_USDT"] },
-  { account_id: 2, token: null, markets: ["BTC_USDT"] },
-  { account_id: 3, token: null, markets: ["ETH_USDT", "USDT_BTC"] },
-];
+let accounts = [];
 
 async function getWsToken(accountId) {
   try {
@@ -252,6 +248,7 @@ app.get("/start/:accountId/:market", async (req, res) => {
 });
 
 // Эндпоинт для остановки отслеживания
+// Эндпоинт для остановки отслеживания
 app.get("/stop/:accountId/:market", (req, res) => {
   const { accountId, market } = req.params;
   
@@ -271,9 +268,9 @@ app.get("/stop/:accountId/:market", (req, res) => {
     // Отправляем сообщение отписки от событий
     if (account.ws) {
       const unsubscribeMessage = {
-        id: 13,
+        id: 13, // Убедитесь, что ID уникален для каждого запроса
         method: "ordersExecuted_unsubscribe", // Метод для отписки
-        params: [[market]], // Указываем рынок, от которого отписываемся
+        params: [market], // Указываем рынок, от которого отписываемся
       };
       account.ws.send(JSON.stringify(unsubscribeMessage));
       console.log(`Отправлено сообщение отписки для рынка ${market} аккаунта ${accountId}`);
