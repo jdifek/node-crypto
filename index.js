@@ -221,19 +221,25 @@ app.post("/removeMarket/:accountId", (req, res) => {
 // Эндпоинт для начала отслеживания
 app.get("/start/:accountId/:market", async (req, res) => {
   const { accountId, market } = req.params;
-  const account = accounts.find(acc => acc.account_id == accountId);
 
+  // Проверяем, существует ли аккаунт
+  let account = accounts.find(acc => acc.account_id == accountId);
+
+  // Если аккаунта нет, создаем новый
   if (!account) {
-    return res.status(404).json({ error: `Аккаунт с id ${accountId} не найден` });
+    account = { account_id: parseInt(accountId), token: null, markets: [] };
+    accounts.push(account);
+    console.log(`Добавлен новый аккаунт с id ${accountId}`);
   }
 
+  // Добавляем рынок, если его еще нет
   if (!account.markets.includes(market)) {
-    account.markets.push(market); // Добавляем рынок
+    account.markets.push(market);
     console.log(`Добавлен рынок ${market} для аккаунта ${accountId}`);
 
     // Если WebSocket еще не подключен, подключаемся
     if (!account.ws) {
-      await startTracking(account); // Подключаемся к WebSocket и подписываемся на новый рынок
+      await startTracking(account); // Подключаемся к WebSocket
     } else {
       // Подписываемся на новый рынок
       subscribeToEvents(account.ws, account.markets);
