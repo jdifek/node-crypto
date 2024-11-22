@@ -3,7 +3,7 @@ require("dotenv").config();
 const axios = require("axios");
 const WebSocket = require("ws");
 const express = require("express");
-const app = express(); // Инициализация приложения после импортов
+const app = express(); // Инициализация приложения после импорто
 
 const WHITEBIT_WSS_HOST = process.env.WHITEBIT_WSS_HOST;
 const API_HOST = process.env.WHITE_TRADER_HOST;
