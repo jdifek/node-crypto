@@ -176,9 +176,17 @@ app.post("/addMarket/:accountId", (req, res) => {
     return res.status(404).json({ error: `Аккаунт с id ${accountId} не найден` });
   }
 
+  // Проверяем, если рынок уже существует
   if (!account.markets.includes(market)) {
     account.markets.push(market); // Добавляем новый рынок
     console.log(`Добавлен рынок ${market} для аккаунта ${accountId}`);
+
+    // Подключаемся к WebSocket и подписываемся на новый рынок
+    if (account.ws) {
+      const uniqueAssets = [...new Set(account.markets.flatMap(m => m.split("_")))]; // Извлекаем уникальные активы
+      subscribeToEvents(account.ws, account.markets); // Подписываемся на события
+      subscribeToBalance(account.ws, uniqueAssets); // Подписываемся на баланс
+    }
   }
 
   return res.json({ success: `Рынок ${market} добавлен для аккаунта ${accountId}` });
@@ -210,6 +218,57 @@ app.post("/removeMarket/:accountId", (req, res) => {
   return res.json({ success: `Рынок ${market} удален для аккаунта ${accountId}` });
 });
 
+// Эндпоинт для начала отслеживания
+app.get("/start/:accountId/:market", async (req, res) => {
+  const { accountId, market } = req.params;
+  const account = accounts.find(acc => acc.account_id == accountId);
+
+  if (!account) {
+    return res.status(404).json({ error: `Аккаунт с id ${accountId} не найден` });
+  }
+
+  if (!account.markets.includes(market)) {
+    account.markets.push(market); // Добавляем рынок
+    console.log(`Добавлен рынок ${market} для аккаунта ${accountId}`);
+
+    // Если WebSocket еще не подключен, подключаемся
+    if (!account.ws) {
+      await startTracking(account); // Подключаемся к WebSocket и подписываемся на новый рынок
+    } else {
+      // Подписываемся на новый рынок
+      subscribeToEvents(account.ws, account.markets);
+      const uniqueAssets = [...new Set(account.markets.flatMap(m => m.split("_")))]; // Извлекаем уникальные активы
+      subscribeToBalance(account.ws, uniqueAssets); // Подписываемся на баланс
+    }
+  }
+
+  return res.json({ success: `Начато отслеживание для аккаунта ${accountId} и рынка ${market}` });
+});
+
+// Эндпоинт для остановки отслеживания
+app.get("/stop/:accountId/:market", (req, res) => {
+  const { accountId, market } = req.params;
+  const account = accounts.find(acc => acc.account_id == accountId);
+
+  if (!account) {
+    return res.status(404).json({ error: `Аккаунт с id ${accountId} не найден` });
+  }
+
+  const marketIndex = account.markets.indexOf(market);
+  if (marketIndex !== -1) {
+    account.markets.splice(marketIndex, 1); // Убираем рынок
+    console.log(`Рынок ${market} удален для аккаунта ${accountId}`);
+
+    // Если больше нет рынков
+    if (account.markets.length === 0 && account.ws) {
+      account.ws.close(); // Закрываем соединение
+      account.ws = null;
+      console.log(`Соединение закрыто для аккаунта ${accountId}`);
+    }
+  }
+
+  return res.json({ success: `Рынок ${market} остановлен для аккаунта ${accountId}` });
+});
 // Запуск сервера API
 const port = 3000;
 
