@@ -235,7 +235,12 @@ app.get("/start/:accountId/:market", async (req, res) => {
 
     // Если WebSocket еще не подключен, подключаемся
     if (!account.ws) {
-      await startTracking(account); // Подключаемся к WebSocket
+      try {
+        await startTracking(account); // Подключаемся к WebSocket
+      } catch (error) {
+        console.error(`Ошибка при запуске отслеживания для аккаунта ${accountId}:`, error.message);
+        return res.status(500).json({ error: 'Не удалось запустить отслеживание.' });
+      }
     } else {
       // Подписываемся на новый рынок
       subscribeToEvents(account.ws, account.markets);
