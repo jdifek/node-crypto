@@ -340,7 +340,7 @@ app.get("/stop/:accountId/:market", (req, res) => {
       const unsubscribeMessage = {
         id: 13,
         method: "ordersExecuted_unsubscribe",
-        params: [], // Указываем рынок, от которого отписываемся
+        params: [], // Здесь передаем пустой массив
       };
       account.ws.send(JSON.stringify(unsubscribeMessage));
       console.log(`Отправлено сообщение отписки для рынка ${market} аккаунта ${accountId}`);
