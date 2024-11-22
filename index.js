@@ -318,7 +318,6 @@ app.get("/start/:accountId/:market", async (req, res) => {
   return res.json({ success: `Начато отслеживание для аккаунта ${accountId} и рынка ${market}` });
 });
 
-
 // Эндпоинт для остановки отслеживания
 app.get("/stop/:accountId/:market", (req, res) => {
   const { accountId, market } = req.params;
@@ -330,18 +329,32 @@ app.get("/stop/:accountId/:market", (req, res) => {
   }
 
   const marketIndex = account.markets.indexOf(market);
+  
   if (marketIndex !== -1) {
-    account.markets.splice(marketIndex, 1); // Убираем рынок
+    // Убираем рынок
+    account.markets.splice(marketIndex, 1);
     console.log(`Рынок ${market} удален для аккаунта ${accountId}`);
+
+    // Отправляем сообщение об отписке от событий
+    if (account.ws) {
+      const unsubscribeMessage = {
+        id: 13,
+        method: "ordersExecuted_unsubscribe",
+        params: [], // Указываем рынок, от которого отписываемся
+      };
+      account.ws.send(JSON.stringify(unsubscribeMessage));
+      console.log(`Отправлено сообщение отписки для рынка ${market} аккаунта ${accountId}`);
+    }
   }
 
+  // Если больше нет рынков
   if (account.markets.length === 0 && account.ws) {
-    account.ws.close();
+    account.ws.close(); // Закрываем соединение
     account.ws = null;
     console.log(`[Аккаунт ${accountId}] Остановлено отслеживание всех рынков`);
   }
 
-  return res.json({ success: `Рынок ${market} удален для аккаунта ${accountId}` });
+  return res.json({ success: `Рынок ${market} остановлен для аккаунта ${accountId}` });
 });
 
 // Запуск сервера
