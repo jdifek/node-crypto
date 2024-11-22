@@ -16,19 +16,72 @@ let accounts = [];
 
 async function getWsToken(accountId) {
   try {
-    const response = await axios.get(
-      `${API_HOST}/api/accounts/${accountId}/getWsToken`
-    );
+    const response = await axios.get(`${API_HOST}/api/accounts/${accountId}/getWsToken`);
     const token = response.data.token;
     console.log(`Токен для аккаунта ${accountId}:`, token);
     return token;
   } catch (error) {
-    console.error(
-      `Ошибка при получении WS токена для аккаунта ${accountId}:`,
-      error.message
-    );
-    throw error;
+    console.error(`Ошибка при получении WS токена для аккаунта ${accountId}:`, error.message);
+    throw error; // Обработка ошибки
   }
+}
+
+function startTracking(account) {
+  const connect = async () => {
+    try {
+      const token = await getWsToken(account.account_id); // Получаем токен
+      account.token = token; // Сохраняем токен в аккаунт
+
+      const ws = new WebSocket(WHITEBIT_WSS_HOST);
+
+      ws.on("open", () => {
+        console.log(`[Аккаунт ${account.account_id}] Подключено к WebSocket`);
+
+        // Отправляем сообщение авторизации
+        ws.send(
+          JSON.stringify({
+            id: 0,
+            method: "authorize",
+            params: [account.token, "public"], // Используем токен для авторизации
+          })
+        );
+
+        // Обработка сообщений WebSocket после авторизации
+        handleWebSocketMessages(ws, account);
+      });
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data);
+        console.log(`[Аккаунт ${account.account_id}] Получено сообщение WebSocket:`, message);
+
+        // Проверяем ответ на авторизацию
+        if (message.method === "authorize" && message.error) {
+          console.error(`[Аккаунт ${account.account_id}] Ошибка авторизации:`, message.error.message);
+          return;
+        }
+
+        // Подписка на события после успешной авторизации
+        if (!message.error) {
+          subscribeToEvents(ws, account.markets);
+          const uniqueAssets = [...new Set(account.markets.flatMap(m => m.split("_")))]; 
+          subscribeToBalance(ws, uniqueAssets);
+        }
+      });
+
+      ws.on("error", (error) => {
+        console.error(`[Аккаунт ${account.account_id}] Ошибка WebSocket:`, error.message);
+        ws.close();
+      });
+
+      ws.on("close", () => {
+        console.log(`[Аккаунт ${account.account_id}] Соединение WebSocket закрыто.`);
+      });
+    } catch (error) {
+      console.error(`[Аккаунт ${account.account_id}] Не удалось подключиться к WebSocket:`, error.message);
+    }
+  };
+
+  connect();
 }
 
 function subscribeToEvents(ws, markets) {
